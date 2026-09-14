@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>منصة الاختبارات التمريضية</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=IBM+Plex+Mono:wght@500&display=swap');
+
+:root{
+  --paper:#F6F4EE;
+  --ink:#16302E;
+  --teal:#1F4B48;
+  --teal-deep:#0F2E2C;
+  --line:#C9C2AD;
+  --amber:#B5762A;
+  --wrong:#9C3B2E;
+  --good:#2E6B4F;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{
+  font-family:'Tajawal', sans-serif;
+  background:var(--paper);
+  color:var(--ink);
+  min-height:100vh;
+  display:flex;
+  justify-content:center;
+  padding:28px 14px 60px;
+}
+.app{width:100%; max-width:680px;}
+
+.top{
+  background:var(--teal-deep);
+  color:var(--paper);
+  padding:16px 22px;
+  border-radius:10px 10px 0 0;
+  border-bottom:4px solid var(--amber);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+.top h1{font-size:19px; font-weight:800;}
+.tabs{display:flex; gap:4px;}
+.tab{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:12px;
+  color:#CFEAE3;
+  background:transparent;
+  border:1px solid rgba(207,234,227,.35);
+  padding:6px 12px;
+  border-radius:6px;
+  cursor:pointer;
+}
+.tab.active{background:var(--amber); color:#fff; border-color:var(--amber);}
+
+.panel{
+  background:#fff;
+  border:1px solid var(--line);
+  border-top:none;
+  border-radius:0 0 10px 10px;
+  min-height:300px;
+  padding:24px;
+}
+
+/* ---- home / list ---- */
+.empty{
+  text-align:center;
+  padding:50px 20px;
+  color:#7a7a6e;
+}
+.empty p{margin-top:8px; font-size:14.5px;}
+.exam-card{
+  border:1.5px solid var(--line);
+  border-radius:9px;
+  padding:16px 18px;
+  margin-bottom:12px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+}
+.exam-card .info h3{font-size:16px; margin-bottom:4px;}
+.exam-card .info span{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:11.5px;
+  color:var(--teal);
+  direction:ltr;
+}
+.exam-card .actions{display:flex; gap:8px;}
+.btn{
+  border:none;
+  border-radius:6px;
+  padding:9px 16px;
+  font-family:'Tajawal', sans-serif;
+  font-weight:700;
+  font-size:13.5px;
+  cursor:pointer;
+}
+.btn.primary{background:var(--teal); color:#fff;}
+.btn.primary:hover{background:var(--teal-deep);}
+.btn.ghost{background:#fff; border:1.5px solid var(--line); color:var(--ink);}
+.btn.danger{background:#fff; border:1.5px solid var(--wrong); color:var(--wrong);}
+.btn.amber{background:var(--amber); color:#fff;}
+.btn:disabled{opacity:.5; cursor:not-allowed;}
+
+.newbtn-row{margin-top:18px; text-align:center;}
+
+/* ---- builder ---- */
+.field{margin-bottom:16px;}
+.field label{
+  display:block;
+  font-size:13px;
+  font-weight:700;
+  margin-bottom:6px;
+  color:var(--teal);
+}
+.field input[type=text], .field textarea{
+  width:100%;
+  border:1.5px solid var(--line);
+  border-radius:7px;
+  padding:10px 12px;
+  font-family:'Tajawal', sans-serif;
+  font-size:15px;
+  resize:vertical;
+}
+.q-block{
+  border:1.5px dashed var(--line);
+  border-radius:9px;
+  padding:16px;
+  margin-bottom:14px;
+  position:relative;
+}
+.q-block .q-num{
+  font-family:'IBM Plex Mono', monospace;
+  font-size:11px;
+  color:var(--amber);
+  margin-bottom:8px;
+  direction:ltr;
+}
+.opt-row{display:flex; align-items:center; gap:8px; margin-bottom:8px;}
+.opt-row input[type=radio]{accent-color:var(--good); width:18px; height:18px;}
+.opt-row input[type=text]{flex:1;}
+.remove-q{
+  position:absolute; left:12px; top:12px;
+  background:none; border:none; color:var(--wrong);
+  font-size:13px; cursor:pointer; font-weight:700;
+}
+.builder-controls{display:flex; justify-content:space-between; gap:10px; margin-top:6px;}
+
+/* ---- quiz player (reuses styling) ---- */
+.vitals{height:34px; border-bottom:1px dashed var(--line); position:relative; overflow:hidden; margin:-24px -24px 20px;}
+.vitals svg{width:100%; height:100%; display:block;}
+.vitals .count{
+  position:absolute; left:16px; top:50%; transform:translateY(-50%);
+  font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--teal);
+  background:#fff; padding:2px 8px; direction:ltr;
+}
+.q-tag{font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--amber); margin-bottom:10px; direction:ltr;}
+.q-text{font-size:18px; font-weight:700; line-height:1.6; margin-bottom:20px;}
+.options{display:flex; flex-direction:column; gap:10px; margin-bottom:18px;}
+.opt{
+  border:1.5px solid var(--line); border-radius:8px; padding:14px 16px;
+  font-size:15px; cursor:pointer; display:flex; align-items:center; gap:12px;
+  background:#fff; transition:border-color .15s, background .15s;
+}
+.opt:hover{border-color:var(--teal);}
+.opt .bullet{
+  width:24px; height:24px; min-width:24px; border-radius:50%;
+  border:1.5px solid var(--line); display:flex; align-items:center; justify-content:center;
+  font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--teal);
+}
+.opt.selected{border-color:var(--teal); background:#EFF4F1;}
+.opt.correct{border-color:var(--good); background:#EAF4EC;}
+.opt.correct .bullet{background:var(--good); color:#fff; border-color:var(--good);}
+.opt.wrong{border-color:var(--wrong); background:#FBECEA;}
+.opt.wrong .bullet{background:var(--wrong); color:#fff; border-color:var(--wrong);}
+.opt.disabled{cursor:default;}
+.feedback{font-size:14px; padding:12px 14px; border-radius:8px; margin-bottom:18px; display:none; line-height:1.7;}
+.feedback.show{display:block;}
+.feedback.good{background:#EAF4EC; color:var(--good); border:1px solid #cfe6d6;}
+.feedback.bad{background:#FBECEA; color:var(--wrong); border:1px solid #f0d0cb;}
+.controls-row{display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--line); margin:0 -24px -24px; padding:16px 24px;}
+.score{font-family:'IBM Plex Mono', monospace; font-size:13px; color:var(--teal); direction:ltr;}
+.result{text-align:center; padding:40px 10px;}
+.result .big{font-size:42px; font-weight:800; color:var(--teal); font-family:'IBM Plex Mono', monospace;}
+.result p{margin-top:10px; color:#5b5b52; font-size:15px;}
+
+.toast{
+  position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+  background:var(--teal-deep); color:#fff; padding:10px 20px; border-radius:8px;
+  font-size:13.5px; opacity:0; pointer-events:none; transition:opacity .25s;
+}
+.toast.show{opacity:1;}
+
+.loading{text-align:center; padding:50px; color:#7a7a6e; font-size:14px;}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="top">
+    <h1 id="pageTitle">منصة الاختبارات التمريضية</h1>
+    <div class="tabs">
+      <button class="tab active" data-tab="take">الاختبارات</button>
+      <button class="tab" data-tab="admin">لوحة التحكم</button>
+    </div>
+  </div>
+  <div class="panel" id="panel">
+    <div class="loading">جارٍ التحميل...</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const panel = document.getElementById('panel');
+const toastEl = document.getElementById('toast');
+const pageTitle = document.getElementById('pageTitle');
+let currentTab = 'take';
+let examsIndex = [];
+
+function toast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  setTimeout(()=>toastEl.classList.remove('show'), 2200);
+}
+
+function uid(){ return 'ex_' + Date.now() + '_' + Math.floor(Math.random()*10000); }
+
+async function loadIndex(){
+  try{
+    const res = await window.storage.get('exams-index', false);
+    examsIndex = res ? JSON.parse(res.value) : [];
+  }catch(e){
+    examsIndex = [];
+  }
+}
+
+async function saveIndex(){
+  try{
+    await window.storage.set('exams-index', JSON.stringify(examsIndex), false);
+  }catch(e){
+    toast('تعذر حفظ الفهرس');
+  }
+}
+
+async function loadExam(id){
+  try{
+    const res = await window.storage.get('exam:' + id, false);
+    return res ? JSON.parse(res.value) : null;
+  }catch(e){
+    return null;
+  }
+}
+
+async function saveExam(exam){
+  try{
+    await window.storage.set('exam:' + exam.id, JSON.stringify(exam), false);
+    return true;
+  }catch(e){
+    toast('تعذر حفظ الاختبار');
+    return false;
+  }
+}
+
+async function deleteExamData(id){
+  try{
+    await window.storage.delete('exam:' + id, false);
+  }catch(e){}
+}
+
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentTab = btn.dataset.tab;
+    render();
+  });
+});
+
+async function render(){
+  await loadIndex();
+  if(currentTab === 'take') renderTakeHome();
+  else renderAdminHome();
+}
+
+/* ---------------- TAKE TAB ---------------- */
+function renderTakeHome(){
+  pageTitle.textContent = 'منصة الاختبارات التمريضية';
+  if(examsIndex.length === 0){
+    panel.innerHTML = `<div class="empty">
+      <h3>لا توجد اختبارات بعد</h3>
+      <p>انتقل إلى «لوحة التحكم» لإضافة أول اختبار.</p>
+    </div>`;
+    return;
+  }
+  panel.innerHTML = examsIndex.map(ex => `
+    <div class="exam-card">
+      <div class="info">
+        <h3>${escapeHtml(ex.title)}</h3>
+        <span>${ex.count} سؤال</span>
+      </div>
+      <div class="actions">
+        <button class="btn primary" onclick="startExam('${ex.id}')">ابدأ</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+let playerState = null;
+
+async function startExam(id){
+  const exam = await loadExam(id);
+  if(!exam || !exam.questions || exam.questions.length === 0){
+    toast('هذا الاختبار فارغ');
+    return;
+  }
+  playerState = { exam, current:0, score:0, answered:false };
+  renderQuestion();
+}
+
+function drawVitals(svgEl, ratio){
+  const w=600,h=34; let path=`M0 ${h/2}`;
+  const seg=12;
+  for(let i=0;i<seg;i++){
+    const x=(w/seg)*i;
+    const active=(x/w)<ratio;
+    const amp=active?13:4;
+    path+=` L${x+10} ${h/2-amp} L${x+16} ${h/2+amp*0.6} L${x+22} ${h/2}`;
+  }
+  path+=` L${w} ${h/2}`;
+  svgEl.innerHTML = `<path d="${path}" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+}
+
+function renderQuestion(){
+  pageTitle.textContent = playerState.exam.title;
+  const {exam,current} = playerState;
+  const item = exam.questions[current];
+  const letters=['أ','ب','ج','د'];
+  playerState.answered = false;
+
+  panel.innerHTML = `
+    <div class="vitals"><svg id="vsvg" viewBox="0 0 600 34" preserveAspectRatio="none"></svg>
+      <div class="count">${current+1} / ${exam.questions.length}</div>
+    </div>
+    <div class="q-tag">Q${String(current+1).padStart(2,'0')}</div>
+    <div class="q-text">${escapeHtml(item.q)}</div>
+    <div class="options" id="opts"></div>
+    <div class="feedback" id="fb"></div>
+    <div class="controls-row">
+      <div class="score" id="scoreLine">SCORE: ${playerState.score}/${current}</div>
+      <button class="btn primary" id="nextBtn" disabled>${current === exam.questions.length-1 ? 'إنهاء الاختبار' : 'التالي'}</button>
+    </div>
+  `;
+  drawVitals(document.getElementById('vsvg'), current/exam.questions.length);
+
+  const optsDiv = document.getElementById('opts');
+  item.options.forEach((opt, idx)=>{
+    const div = document.createElement('div');
+    div.className='opt';
+    div.innerHTML = `<span class="bullet">${letters[idx]}</span><span>${escapeHtml(opt)}</span>`;
+    div.addEventListener('click', ()=>selectOption(idx, div, item));
+    optsDiv.appendChild(div);
+  });
+
+  document.getElementById('nextBtn').addEventListener('click', nextQuestion);
+}
+
+function selectOption(idx, el, item){
+  if(playerState.answered) return;
+  playerState.answered = true;
+  const fb = document.getElementById('fb');
+  const allOpts = document.querySelectorAll('#opts .opt');
+  allOpts.forEach(o=>o.classList.add('disabled'));
+
+  if(idx === item.correct){
+    el.classList.add('correct');
+    playerState.score++;
+    fb.className='feedback show good';
+    fb.textContent = '✓ إجابة صحيحة' + (item.note ? ' — ' + item.note : '');
+  }else{
+    el.classList.add('wrong');
+    allOpts[item.correct].classList.add('correct');
+    fb.className='feedback show bad';
+    fb.textContent = '✗ إجابة غير صحيحة' + (item.note ? ' — ' + item.note : '');
+  }
+  document.getElementById('scoreLine').textContent = `SCORE: ${playerState.score}/${playerState.current+1}`;
+  document.getElementById('nextBtn').disabled = false;
+}
+
+function nextQuestion(){
+  const {exam} = playerState;
+  if(playerState.current < exam.questions.length -1){
+    playerState.current++;
+    renderQuestion();
+  }else{
+    renderResult();
+  }
+}
+
+function renderResult(){
+  const {exam,score} = playerState;
+  const pct = Math.round((score/exam.questions.length)*100);
+  let msg = pct>=80 ? 'أداء ممتاز — استمر بهذا المستوى.' : pct>=60 ? 'أداء جيد، راجع الأخطاء لتثبيت المعلومة.' : 'يُنصح بمراجعة المفاهيم الأساسية قبل المحاولة التالية.';
+  panel.innerHTML = `
+    <div class="result">
+      <div class="big">${score} / ${exam.questions.length}</div>
+      <p>نسبة الإجابات الصحيحة: ${pct}% — ${msg}</p>
+      <div style="margin-top:22px; display:flex; gap:10px; justify-content:center;">
+        <button class="btn amber" id="retryBtn">إعادة المحاولة</button>
+        <button class="btn ghost" id="backBtn">العودة للقائمة</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('retryBtn').addEventListener('click', ()=>{
+    playerState = { exam, current:0, score:0, answered:false };
+    renderQuestion();
+  });
+  document.getElementById('backBtn').addEventListener('click', ()=>{
+    playerState = null;
+    render();
+  });
+}
+
+/* ---------------- ADMIN TAB ---------------- */
+function renderAdminHome(){
+  pageTitle.textContent = 'لوحة التحكم';
+  const list = examsIndex.length === 0
+    ? `<div class="empty"><p>لم تُنشئ أي اختبار بعد.</p></div>`
+    : examsIndex.map(ex => `
+      <div class="exam-card">
+        <div class="info">
+          <h3>${escapeHtml(ex.title)}</h3>
+          <span>${ex.count} سؤال</span>
+        </div>
+        <div class="actions">
+          <button class="btn ghost" onclick="editExam('${ex.id}')">تعديل</button>
+          <button class="btn danger" onclick="confirmDelete('${ex.id}')">حذف</button>
+        </div>
+      </div>
+    `).join('');
+
+  panel.innerHTML = list + `
+    <div class="newbtn-row">
+      <button class="btn primary" id="createBtn">+ إضافة اختبار جديد</button>
+    </div>
+  `;
+  document.getElementById('createBtn').addEventListener('click', ()=>openBuilder(null));
+}
+
+window.confirmDelete = async function(id){
+  if(!confirm('هل تريد حذف هذا الاختبار نهائيًا؟')) return;
+  examsIndex = examsIndex.filter(e=>e.id!==id);
+  await saveIndex();
+  await deleteExamData(id);
+  toast('تم الحذف');
+  renderAdminHome();
+}
+
+window.editExam = async function(id){
+  const exam = await loadExam(id);
+  if(exam) openBuilder(exam);
+}
+
+let builderState = null;
+
+function openBuilder(existingExam){
+  builderState = existingExam
+    ? JSON.parse(JSON.stringify(existingExam))
+    : { id: uid(), title:'', questions:[] };
+
+  if(builderState.questions.length === 0){
+    builderState.questions.push(blankQuestion());
+  }
+  renderBuilder();
+}
+
+function blankQuestion(){
+  return { q:'', options:['','','',''], correct:0, note:'' };
+}
+
+function renderBuilder(){
+  pageTitle.textContent = builderState.id && examsIndex.find(e=>e.id===builderState.id) ? 'تعديل الاختبار' : 'إضافة اختبار جديد';
+
+  let qHtml = builderState.questions.map((item, qi)=>`
+    <div class="q-block">
+      ${builderState.questions.length>1 ? `<button class="remove-q" onclick="removeQuestion(${qi})">حذف السؤال ✕</button>` : ''}
+      <div class="q-num">Q${String(qi+1).padStart(2,'0')}</div>
+      <div class="field">
+        <label>نص السؤال</label>
+        <textarea rows="2" oninput="updateQ(${qi},'q',this.value)">${escapeHtml(item.q)}</textarea>
+      </div>
+      ${[0,1,2,3].map(oi=>`
+        <div class="opt-row">
+          <input type="radio" name="correct-${qi}" ${item.correct===oi?'checked':''} onchange="updateQ(${qi},'correct',${oi})">
+          <input type="text" placeholder="الخيار ${['أ','ب','ج','د'][oi]}" value="${escapeAttr(item.options[oi])}" oninput="updateOpt(${qi},${oi},this.value)">
+        </div>
+      `).join('')}
+      <div class="field" style="margin-top:10px;">
+        <label>شرح الإجابة (اختياري)</label>
+        <textarea rows="2" oninput="updateQ(${qi},'note',this.value)">${escapeHtml(item.note||'')}</textarea>
+      </div>
+    </div>
+  `).join('');
+
+  panel.innerHTML = `
+    <div class="field">
+      <label>تسمية الاختبار</label>
+      <input type="text" id="titleInput" value="${escapeAttr(builderState.title)}" placeholder="مثال: اختبار عن موضوع القلب">
+    </div>
+    <div class="field" style="border:1.5px dashed var(--line); border-radius:9px; padding:14px;">
+      <label>الصق نص الأسئلة هنا (يدعم صيغة Question / A) B) C) D) / Correct Answer / Rationale)</label>
+      <textarea id="pasteArea" rows="8" placeholder="Question 8
+When managing a client with...
+ A) ...
+ B) ...
+ C) ...
+ D) ...
+Correct Answer: B) ...
+ Rationale: ..."></textarea>
+      <div style="margin-top:10px;"><button class="btn amber" id="importBtn">استخراج الأسئلة من النص</button></div>
+    </div>
+    ${qHtml}
+    <div class="builder-controls">
+      <button class="btn ghost" id="addQBtn">+ إضافة سؤال</button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn ghost" id="cancelBtn">إلغاء</button>
+        <button class="btn primary" id="saveBtn">حفظ الاختبار</button>
+      </div>
+    </div>
+  `;
+  document.getElementById('titleInput').addEventListener('input', e=>builderState.title = e.target.value);
+  document.getElementById('addQBtn').addEventListener('click', ()=>{
+    builderState.questions.push(blankQuestion());
+    renderBuilder();
+  });
+  document.getElementById('cancelBtn').addEventListener('click', ()=>{
+    builderState = null;
+    renderAdminHome();
+  });
+  document.getElementById('saveBtn').addEventListener('click', saveBuilder);
+  document.getElementById('importBtn').addEventListener('click', handleImport);
+}
+
+function handleImport(){
+  const text = document.getElementById('pasteArea').value;
+  const parsed = parsePastedQuestions(text);
+  if(parsed.length === 0){
+    toast('لم أستطع التعرف على أي سؤال بهذا النص، تأكد من الصيغة');
+    return;
+  }
+  const isBlankOnly = builderState.questions.length === 1
+    && !builderState.questions[0].q.trim()
+    && builderState.questions[0].options.every(o=>!o.trim());
+
+  if(isBlankOnly) builderState.questions = parsed;
+  else builderState.questions = builderState.questions.concat(parsed);
+
+  renderBuilder();
+  toast(`تم استخراج ${parsed.length} سؤال بنجاح`);
+}
+
+function parsePastedQuestions(text){
+  if(!text || !text.trim()) return [];
+  const clean = text.replace(/\*\*/g, '').replace(/\r/g, '');
+  const blocks = clean.split(/\n?\s*Question\s*#?\s*\d+[:.\-]?\s*\n?/i).filter(b=>b.trim().length);
+  const results = [];
+  const optLineRe = /^\(?([A-Da-d])[\.\)\:]\s*(.*)$/;
+
+  blocks.forEach(block=>{
+    const lines = block.split('\n')
+      .map(l=>l.trim().replace(/^[-•*]\s*/, ''))
+      .filter(l=>l.length);
+    let i = 0;
+    const qLines = [];
+    while(i < lines.length && !optLineRe.test(lines[i])){
+      qLines.push(lines[i]);
+      i++;
+    }
+    const qText = qLines.join(' ').trim();
+
+    const options = {A:'', B:'', C:'', D:''};
+    while(i < lines.length && optLineRe.test(lines[i])){
+      const m = lines[i].match(optLineRe);
+      if(m) options[m[1].toUpperCase()] = m[2].trim();
+      i++;
+    }
+
+    const rest = lines.slice(i).join('\n');
+    const correctMatch = rest.match(/Correct\s*Answer\s*[:\-]?\s*\(?([A-Da-d])\)?/i);
+    const rationaleMatch = rest.match(/Rationale\s*[:\-]?\s*([\s\S]*)/i);
+    const correctLetter = correctMatch ? correctMatch[1].toUpperCase() : null;
+    const rationale = rationaleMatch ? rationaleMatch[1].trim() : '';
+
+    if(qText && options.A && options.B && options.C && options.D && correctLetter){
+      results.push({
+        q: qText,
+        options: [options.A, options.B, options.C, options.D],
+        correct: ['A','B','C','D'].indexOf(correctLetter),
+        note: rationale
+      });
+    }
+  });
+
+  return results;
+}
+
+window.updateQ = function(qi, field, value){
+  builderState.questions[qi][field] = value;
+}
+window.updateOpt = function(qi, oi, value){
+  builderState.questions[qi].options[oi] = value;
+}
+window.removeQuestion = function(qi){
+  builderState.questions.splice(qi,1);
+  renderBuilder();
+}
+
+async function saveBuilder(){
+  const title = builderState.title.trim();
+  if(!title){ toast('الرجاء إدخال عنوان للاختبار'); return; }
+
+  for(let i=0;i<builderState.questions.length;i++){
+    const q = builderState.questions[i];
+    if(!q.q.trim() || q.options.some(o=>!o.trim())){
+      toast(`أكمل نص السؤال والخيارات في السؤال ${i+1}`);
+      return;
+    }
+  }
+
+  const exam = { id: builderState.id, title, questions: builderState.questions };
+  const ok = await saveExam(exam);
+  if(!ok) return;
+
+  const idxEntry = { id: exam.id, title: exam.title, count: exam.questions.length };
+  const pos = examsIndex.findIndex(e=>e.id===exam.id);
+  if(pos>=0) examsIndex[pos] = idxEntry;
+  else examsIndex.push(idxEntry);
+  await saveIndex();
+
+  toast('تم الحفظ بنجاح');
+  builderState = null;
+  renderAdminHome();
+}
+
+function escapeHtml(str){
+  return (str||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function escapeAttr(str){ return escapeHtml(str); }
+
+render();
+</script>
+
+</body>
+</html>
