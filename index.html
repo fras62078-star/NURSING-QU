@@ -94,36 +94,50 @@ button.ghost{background:transparent;color:var(--teal);border:1.5px solid var(--t
   <div class="chart-body">
 
     <!-- شاشة إدخال الأسئلة -->
-    <div id="inputView">
-      <div class="input-area">
-        <span class="field-label">اسم الاختبار</span>
-        <input type="text" id="quizName" placeholder="مثال: اختبار التمريض النفسي">
+  function parsePastedQuestions(text){
+  if(!text || !text.trim()) return [];
+  const clean = text.replace(/\*\*/g, '').replace(/\r/g, '');
+  const blocks = clean.split(/\n?\s*Question\s*#?\s*\d+[:.\-]?\s*\n?/i).filter(b=>b.trim().length);
+  const results = [];
+  const optLineRe = /^\(?([A-Da-d])[\.\)\:]\s*(.*)$/;
 
-        <p class="hint">الصق أسئلتك بالصيغة التالية (سؤال، خيارات A-D، الإجابة الصحيحة، والتوضيح). يمكنك لصق أي عدد من الأسئلة دفعة واحدة:</p>
-        <div class="format-box">Question 1
-&lt;نص السؤال&gt;
- A) ...
- B) ...
- C) ...
- D) ...
-Correct Answer: C) ...
- Rationale: ...</div>
-        <textarea id="rawInput" placeholder="الصق نص الأسئلة هنا..."></textarea>
-        <div class="input-controls">
-          <button class="primary" id="parseBtn">حفظ الاختبار وبدء الحل</button>
-          <span id="parsedCount" style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--teal);direction:ltr;"></span>
-        </div>
-        <div class="parse-error" id="parseError"></div>
+  blocks.forEach(block=>{
+    const lines = block.split('\n')
+      .map(l=>l.trim().replace(/^[-•*]\s*/, ''))
+      .filter(l=>l.length);
+    let i = 0;
+    const qLines = [];
+    while(i < lines.length && !optLineRe.test(lines[i])){
+      qLines.push(lines[i]);
+      i++;
+    }
+    const qText = qLines.join(' ').trim();
 
-        <div class="link-box" id="linkBox" style="display:none">
-          <div class="link-box-title">✓ تم حفظ الاختبار — هذا رابطه الخاص:</div>
-          <div class="link-row">
-            <input type="text" id="quizLinkField" readonly>
-            <button class="ghost" id="copyLinkBtn">نسخ الرابط</button>
-          </div>
-          <div class="link-note">أي شخص يفتح هذا الرابط (على نفس النسخة المرفوعة من الصفحة) يدخل مباشرة لهذا الاختبار بالضبط.</div>
-          <button class="primary" id="goToQuizBtn" style="margin-top:14px;">بدء الاختبار الآن</button>
-        </div>
+    const options = {A:'', B:'', C:'', D:''};
+    while(i < lines.length && optLineRe.test(lines[i])){
+      const m = lines[i].match(optLineRe);
+      if(m) options[m[1].toUpperCase()] = m[2].trim();
+      i++;
+    }
+
+    const rest = lines.slice(i).join('\n');
+    const correctMatch = rest.match(/Correct\s*Answer\s*[:\-]?\s*\(?([A-Da-d])\)?/i);
+    const rationaleMatch = rest.match(/Rationale\s*[:\-]?\s*([\s\S]*)/i);
+    const correctLetter = correctMatch ? correctMatch[1].toUpperCase() : null;
+    const rationale = rationaleMatch ? rationaleMatch[1].trim() : '';
+
+    if(qText && options.A && options.B && options.C && options.D && correctLetter){
+      results.push({
+        q: qText,
+        options: [options.A, options.B, options.C, options.D],
+        correct: ['A','B','C','D'].indexOf(correctLetter),
+        note: rationale
+      });
+    }
+  });
+
+  return results;
+}
 
         <div class="saved-quizzes" id="savedQuizzes" style="display:none">
           <h3>الاختبارات المحفوظة</h3>
