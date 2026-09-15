@@ -31,11 +31,19 @@ button.primary{background:var(--teal);color:#fff;border:none;padding:12px 28px;b
 button.primary:hover{background:var(--teal-deep);}
 
 .saved-quizzes{margin-top:26px;border-top:1px dashed var(--line);padding-top:18px;}
+.link-box{margin-top:16px;background:#EAF4EC;border:1px solid #cfe6d6;border-radius:8px;padding:16px;}
+.link-box-title{font-size:13.5px;font-weight:700;color:var(--good);margin-bottom:10px;}
+.link-row{display:flex;gap:8px;}
+.link-row input{flex:1;border:1px solid var(--line);border-radius:6px;padding:9px 12px;font-family:'IBM Plex Mono',monospace;font-size:12px;direction:ltr;background:#fff;color:var(--ink);}
+.link-note{font-size:12px;color:#5b5b52;margin-top:8px;line-height:1.7;}
+.saved-link-row{display:flex;gap:6px;align-items:center;}
 .saved-quizzes h3{font-size:14px;color:var(--teal-deep);margin-bottom:10px;}
 .saved-link{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:7px;margin-bottom:8px;cursor:pointer;background:#fbfaf7;}
 .saved-link:hover{border-color:var(--teal);background:#EFF4F1;}
 .saved-link .name{font-weight:700;font-size:14px;color:var(--teal-deep);}
 .saved-link .info{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a8a7c;direction:ltr;}
+.copy-mini{background:transparent;border:1px solid var(--teal);color:var(--teal);font-size:11px;padding:5px 10px;border-radius:6px;cursor:pointer;font-family:'Tajawal',sans-serif;}
+.copy-mini:hover{background:var(--teal);color:#fff;}
 
 .vitals{height:38px;border-bottom:1px dashed var(--line);position:relative;overflow:hidden;}
 .vitals svg{width:100%;height:100%;display:block;}
@@ -93,7 +101,7 @@ button.ghost{background:transparent;color:var(--teal);border:1.5px solid var(--t
 
         <p class="hint">الصق أسئلتك بالصيغة التالية (سؤال، خيارات A-D، الإجابة الصحيحة، والتوضيح). يمكنك لصق أي عدد من الأسئلة دفعة واحدة:</p>
         <div class="format-box">Question 1
-&lt;نص السؤا&gt;
+&lt;نص السؤال&gt;
  A) ...
  B) ...
  C) ...
@@ -106,6 +114,16 @@ Correct Answer: C) ...
           <span id="parsedCount" style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--teal);direction:ltr;"></span>
         </div>
         <div class="parse-error" id="parseError"></div>
+
+        <div class="link-box" id="linkBox" style="display:none">
+          <div class="link-box-title">✓ تم حفظ الاختبار — هذا رابطه الخاص:</div>
+          <div class="link-row">
+            <input type="text" id="quizLinkField" readonly>
+            <button class="ghost" id="copyLinkBtn">نسخ الرابط</button>
+          </div>
+          <div class="link-note">أي شخص يفتح هذا الرابط (على نفس النسخة المرفوعة من الصفحة) يدخل مباشرة لهذا الاختبار بالضبط.</div>
+          <button class="primary" id="goToQuizBtn" style="margin-top:14px;">بدء الاختبار الآن</button>
+        </div>
 
         <div class="saved-quizzes" id="savedQuizzes" style="display:none">
           <h3>الاختبارات المحفوظة</h3>
@@ -160,6 +178,10 @@ const parseError = document.getElementById('parseError');
 const parsedCount = document.getElementById('parsedCount');
 const savedQuizzesBox = document.getElementById('savedQuizzes');
 const savedList = document.getElementById('savedList');
+const linkBox = document.getElementById('linkBox');
+const quizLinkField = document.getElementById('quizLinkField');
+const copyLinkBtn = document.getElementById('copyLinkBtn');
+const goToQuizBtn = document.getElementById('goToQuizBtn');
 
 const vitalsWrap = document.getElementById('vitalsWrap');
 const qText = document.getElementById('qText');
@@ -197,6 +219,38 @@ const localDB = {
 
 function slugify(name){
   return name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\u0600-\u06FF\-]/g, '');
+}
+
+// ---- ترميز الاختبار داخل رابط قابل للمشاركة (URL fragment) ----
+function encodeQuizPayload(name, qs){
+  const json = JSON.stringify({ n: name, q: qs });
+  return btoa(unescape(encodeURIComponent(json)));
+}
+function decodeQuizPayload(encoded){
+  const json = decodeURIComponent(escape(atob(encoded)));
+  return JSON.parse(json);
+}
+function buildQuizLink(name, qs){
+  const encoded = encodeQuizPayload(name, qs);
+  return location.origin + location.pathname + '#q=' + encoded;
+}
+async function copyText(text){
+  try{
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch(e){
+    try{
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      return true;
+    } catch(e2){ return false; }
+  }
 }
 
 // ---- تحليل النص الملصوق إلى أسئلة ----
@@ -250,8 +304,22 @@ async function loadSavedQuizzes(){
       list.forEach(entry => {
         const div = document.createElement('div');
         div.className = 'saved-link';
-        div.innerHTML = `<span class="name">${entry.name}</span><span class="info">${entry.count} سؤال</span>`;
-        div.addEventListener('click', () => openSavedQuiz(entry.slug, entry.name));
+        div.innerHTML = `<span class="name">${entry.name}</span>
+          <span class="saved-link-row">
+            <span class="info">${entry.count} سؤال</span>
+            <button class="copy-mini" type="button">نسخ الرابط</button>
+          </span>`;
+        div.addEventListener('click', (e) => {
+          if(e.target.classList.contains('copy-mini')) return;
+          openSavedQuiz(entry.slug, entry.name);
+        });
+        div.querySelector('.copy-mini').addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const link = entry.payload ? (location.origin + location.pathname + '#q=' + entry.payload) : buildQuizLink(entry.name, JSON.parse((await localDB.get('quiz-set:' + entry.slug)).value));
+          const ok = await copyText(link);
+          e.target.textContent = ok ? '✓ تم النسخ' : 'تعذر النسخ';
+          setTimeout(() => { e.target.textContent = 'نسخ الرابط'; }, 1800);
+        });
         savedList.appendChild(div);
       });
     } else {
@@ -277,17 +345,18 @@ async function openSavedQuiz(slug, name){
 
 async function saveQuizSet(name, qs){
   const slug = slugify(name);
+  const payload = encodeQuizPayload(name, qs);
   await localDB.set('quiz-set:' + slug, JSON.stringify(qs));
   try{
     const res = await localDB.get('quiz-index');
     let list = res ? JSON.parse(res.value) : [];
     list = list.filter(e => e.slug !== slug);
-    list.push({ name, slug, count: qs.length });
+    list.push({ name, slug, count: qs.length, payload });
     await localDB.set('quiz-index', JSON.stringify(list));
   } catch(e){
-    await localDB.set('quiz-index', JSON.stringify([{ name, slug, count: qs.length }]));
+    await localDB.set('quiz-index', JSON.stringify([{ name, slug, count: qs.length, payload }]));
   }
-  return slug;
+  return { slug, payload };
 }
 
 parseBtn.addEventListener('click', async () => {
@@ -295,6 +364,7 @@ parseBtn.addEventListener('click', async () => {
   const raw = rawInput.value;
   parseError.className = 'parse-error';
   parseError.textContent = '';
+  linkBox.style.display = 'none';
   if(!name){
     parseError.className = 'parse-error show';
     parseError.textContent = 'الرجاء إدخال اسم الاختبار.';
@@ -313,8 +383,9 @@ parseBtn.addEventListener('click', async () => {
   }
   parseBtn.disabled = true;
   parseBtn.textContent = 'جاري الحفظ...';
+  let saved;
   try{
-    await saveQuizSet(name, parsed);
+    saved = await saveQuizSet(name, parsed);
   } catch(e){
     parseError.className = 'parse-error show';
     parseError.textContent = 'حدث خطأ أثناء حفظ الاختبار: ' + (e && e.message ? e.message : String(e));
@@ -326,6 +397,20 @@ parseBtn.addEventListener('click', async () => {
   parseBtn.textContent = 'حفظ الاختبار وبدء الحل';
   questions = parsed;
   quizName = name;
+  const link = location.origin + location.pathname + '#q=' + saved.payload;
+  quizLinkField.value = link;
+  linkBox.style.display = 'block';
+  linkBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  loadSavedQuizzes();
+});
+
+copyLinkBtn.addEventListener('click', async () => {
+  const ok = await copyText(quizLinkField.value);
+  copyLinkBtn.textContent = ok ? '✓ تم النسخ' : 'تعذر النسخ';
+  setTimeout(() => { copyLinkBtn.textContent = 'نسخ الرابط'; }, 1800);
+});
+
+goToQuizBtn.addEventListener('click', () => {
   startQuiz();
 });
 
@@ -343,6 +428,7 @@ newSetBtn.addEventListener('click', () => {
   resultView.style.display = 'none';
   vitalsWrap.style.display = 'none';
   inputView.style.display = 'block';
+  linkBox.style.display = 'none';
   examTitle.textContent = 'اختبارات تمريضية';
   parseError.className = 'parse-error';
   parseError.textContent = '';
@@ -485,7 +571,29 @@ saveBtn.addEventListener('click', async () => {
   }
 });
 
-loadSavedQuizzes();
+// ---- إذا تم فتح الصفحة برابط اختبار مباشر (#q=...) نبدأ ذلك الاختبار تلقائياً ----
+function tryLoadFromHash(){
+  const hash = location.hash;
+  if(hash && hash.startsWith('#q=')){
+    try{
+      const data = decodeQuizPayload(hash.slice(3));
+      if(data && data.q && data.q.length){
+        questions = data.q;
+        quizName = data.n || 'اختبار';
+        startQuiz();
+        return true;
+      }
+    } catch(e){
+      parseError.className = 'parse-error show';
+      parseError.textContent = 'رابط الاختبار غير صالح أو تالف.';
+    }
+  }
+  return false;
+}
+
+if(!tryLoadFromHash()){
+  loadSavedQuizzes();
+}
 </script>
 </body>
 </html>
