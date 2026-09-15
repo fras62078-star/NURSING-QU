@@ -14,7 +14,7 @@ body{font-family:'Tajawal',sans-serif;background:var(--paper);color:var(--ink);m
 .chart-header h1{font-size:19px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .chart-header .meta{font-family:'IBM Plex Mono',monospace;font-size:12px;color:#CFEAE3;direction:ltr;white-space:nowrap;}
 .chart-body{background:#fff;border:1px solid var(--line);border-top:none;border-radius:0 0 10px 10px;}
- 
+
 /* ---- شاشة إدخال الأسئلة ---- */
 .input-area{padding:26px;}
 .field-label{font-size:13.5px;font-weight:700;color:var(--teal-deep);margin-bottom:6px;display:block;}
@@ -29,14 +29,14 @@ textarea#rawInput:focus{outline:none;border-color:var(--teal);}
 .parse-error.show{display:block;}
 button.primary{background:var(--teal);color:#fff;border:none;padding:12px 28px;border-radius:7px;font-family:'Tajawal',sans-serif;font-weight:700;font-size:14.5px;cursor:pointer;}
 button.primary:hover{background:var(--teal-deep);}
- 
+
 .saved-quizzes{margin-top:26px;border-top:1px dashed var(--line);padding-top:18px;}
 .saved-quizzes h3{font-size:14px;color:var(--teal-deep);margin-bottom:10px;}
 .saved-link{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:1px solid var(--line);border-radius:7px;margin-bottom:8px;cursor:pointer;background:#fbfaf7;}
 .saved-link:hover{border-color:var(--teal);background:#EFF4F1;}
 .saved-link .name{font-weight:700;font-size:14px;color:var(--teal-deep);}
 .saved-link .info{font-family:'IBM Plex Mono',monospace;font-size:11px;color:#8a8a7c;direction:ltr;}
- 
+
 .vitals{height:38px;border-bottom:1px dashed var(--line);position:relative;overflow:hidden;}
 .vitals svg{width:100%;height:100%;display:block;}
 .vitals .count{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--teal);background:#fff;padding:2px 8px;direction:ltr;}
@@ -84,16 +84,16 @@ button.ghost{background:transparent;color:var(--teal);border:1.5px solid var(--t
     <div class="meta">RN · QUIZ</div>
   </div>
   <div class="chart-body">
- 
+
     <!-- شاشة إدخال الأسئلة -->
     <div id="inputView">
       <div class="input-area">
         <span class="field-label">اسم الاختبار</span>
         <input type="text" id="quizName" placeholder="مثال: اختبار التمريض النفسي">
- 
+
         <p class="hint">الصق أسئلتك بالصيغة التالية (سؤال، خيارات A-D، الإجابة الصحيحة، والتوضيح). يمكنك لصق أي عدد من الأسئلة دفعة واحدة:</p>
         <div class="format-box">Question 1
-&lt;نص السؤا&gt;
+&lt;نص السؤال&gt;
  A) ...
  B) ...
  C) ...
@@ -106,14 +106,14 @@ Correct Answer: C) ...
           <span id="parsedCount" style="font-family:'IBM Plex Mono',monospace;font-size:12.5px;color:var(--teal);direction:ltr;"></span>
         </div>
         <div class="parse-error" id="parseError"></div>
- 
+
         <div class="saved-quizzes" id="savedQuizzes" style="display:none">
           <h3>الاختبارات المحفوظة</h3>
           <div id="savedList"></div>
         </div>
       </div>
     </div>
- 
+
     <div class="vitals" id="vitalsWrap" style="display:none">
       <svg id="vitalsSvg" viewBox="0 0 600 38" preserveAspectRatio="none"></svg>
       <div class="count" id="progressCount">1 / 3</div>
@@ -150,7 +150,7 @@ Correct Answer: C) ...
 let questions = [];
 let quizName = '';
 let current = 0, score = 0, answered = false;
- 
+
 const examTitle = document.getElementById('examTitle');
 const inputView = document.getElementById('inputView');
 const quizNameInput = document.getElementById('quizName');
@@ -160,7 +160,7 @@ const parseError = document.getElementById('parseError');
 const parsedCount = document.getElementById('parsedCount');
 const savedQuizzesBox = document.getElementById('savedQuizzes');
 const savedList = document.getElementById('savedList');
- 
+
 const vitalsWrap = document.getElementById('vitalsWrap');
 const qText = document.getElementById('qText');
 const qTag = document.getElementById('qTag');
@@ -177,11 +177,28 @@ const saveStatus = document.getElementById('saveStatus');
 const historyBox = document.getElementById('historyBox');
 const historyList = document.getElementById('historyList');
 const newSetBtn = document.getElementById('newSetBtn');
- 
+
+// تخزين محلي في متصفحك (يعمل عند فتح الصفحة كملف HTML عادي، بخلاف نظام التخزين
+// السحابي الذي لا يتوفر إلا داخل بيئة الشات نفسها)
+const localDB = {
+  async get(key){
+    try{
+      const v = localStorage.getItem(key);
+      return v !== null ? { value: v } : null;
+    } catch(e){ return null; }
+  },
+  async set(key, value){
+    try{
+      localStorage.setItem(key, value);
+      return { value };
+    } catch(e){ return null; }
+  }
+};
+
 function slugify(name){
   return name.trim().toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9\u0600-\u06FF\-]/g, '');
 }
- 
+
 // ---- تحليل النص الملصوق إلى أسئلة ----
 function parseQuestions(raw){
   const blocks = raw.split(/\n\s*Question\s*\d+\s*\n/i);
@@ -221,11 +238,11 @@ function parseQuestions(raw){
   });
   return parsed;
 }
- 
+
 // ---- حفظ/تحميل قائمة الاختبارات (تعمل كـ"روابط" دائمة) ----
 async function loadSavedQuizzes(){
   try{
-    const res = await window.storage.get('quiz-index', false);
+    const res = await localDB.get('quiz-index');
     const list = res ? JSON.parse(res.value) : [];
     if(list.length){
       savedQuizzesBox.style.display = 'block';
@@ -244,10 +261,10 @@ async function loadSavedQuizzes(){
     savedQuizzesBox.style.display = 'none';
   }
 }
- 
+
 async function openSavedQuiz(slug, name){
   try{
-    const res = await window.storage.get('quiz-set:' + slug, false);
+    const res = await localDB.get('quiz-set:' + slug);
     if(!res) return;
     questions = JSON.parse(res.value);
     quizName = name;
@@ -257,22 +274,22 @@ async function openSavedQuiz(slug, name){
     parseError.textContent = 'تعذر تحميل هذا الاختبار المحفوظ.';
   }
 }
- 
+
 async function saveQuizSet(name, qs){
   const slug = slugify(name);
-  await window.storage.set('quiz-set:' + slug, JSON.stringify(qs), false);
+  await localDB.set('quiz-set:' + slug, JSON.stringify(qs));
   try{
-    const res = await window.storage.get('quiz-index', false);
+    const res = await localDB.get('quiz-index');
     let list = res ? JSON.parse(res.value) : [];
     list = list.filter(e => e.slug !== slug);
     list.push({ name, slug, count: qs.length });
-    await window.storage.set('quiz-index', JSON.stringify(list), false);
+    await localDB.set('quiz-index', JSON.stringify(list));
   } catch(e){
-    await window.storage.set('quiz-index', JSON.stringify([{ name, slug, count: qs.length }]), false);
+    await localDB.set('quiz-index', JSON.stringify([{ name, slug, count: qs.length }]));
   }
   return slug;
 }
- 
+
 parseBtn.addEventListener('click', async () => {
   const name = quizNameInput.value.trim();
   const raw = rawInput.value;
@@ -311,7 +328,7 @@ parseBtn.addEventListener('click', async () => {
   quizName = name;
   startQuiz();
 });
- 
+
 function startQuiz(){
   examTitle.textContent = quizName;
   current = 0; score = 0;
@@ -321,7 +338,7 @@ function startQuiz(){
   resultView.style.display = 'none';
   loadQuestion();
 }
- 
+
 newSetBtn.addEventListener('click', () => {
   resultView.style.display = 'none';
   vitalsWrap.style.display = 'none';
@@ -331,7 +348,7 @@ newSetBtn.addEventListener('click', () => {
   parseError.textContent = '';
   loadSavedQuizzes();
 });
- 
+
 function drawVitals(progressRatio){
   const w = 600, h = 38;
   let path = `M0 ${h/2}`;
@@ -345,7 +362,7 @@ function drawVitals(progressRatio){
   path += ` L${w} ${h/2}`;
   vitalsSvg.innerHTML = `<path d="${path}" fill="none" stroke="var(--teal)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
 }
- 
+
 function loadQuestion(){
   answered = false;
   const item = questions[current];
@@ -368,7 +385,7 @@ function loadQuestion(){
   drawVitals(current/questions.length);
   scoreLine.textContent = `SCORE: ${score}/${current}`;
 }
- 
+
 function selectOption(idx, el){
   if(answered) return;
   answered = true;
@@ -389,7 +406,7 @@ function selectOption(idx, el){
   scoreLine.textContent = `SCORE: ${score}/${current+1}`;
   nextBtn.disabled = false;
 }
- 
+
 nextBtn.addEventListener('click', () => {
   if(current < questions.length - 1){
     current++;
@@ -398,7 +415,7 @@ nextBtn.addEventListener('click', () => {
     showResult();
   }
 });
- 
+
 function showResult(){
   quizView.style.display = 'none';
   vitalsWrap.style.display = 'none';
@@ -414,7 +431,7 @@ function showResult(){
   saveStatus.textContent = '';
   loadHistory();
 }
- 
+
 document.getElementById('restartBtn').addEventListener('click', () => {
   current = 0; score = 0;
   resultView.style.display = 'none';
@@ -422,12 +439,12 @@ document.getElementById('restartBtn').addEventListener('click', () => {
   quizView.style.display = 'block';
   loadQuestion();
 });
- 
+
 // ---- الحفظ والسجل الخاص بكل اختبار على حدة ----
 async function loadHistory(){
   try{
     const slug = slugify(quizName);
-    const res = await window.storage.get('quiz-history:' + slug, false);
+    const res = await localDB.get('quiz-history:' + slug);
     const list = res ? JSON.parse(res.value) : [];
     if(list.length){
       historyBox.style.display = 'block';
@@ -441,7 +458,7 @@ async function loadHistory(){
     historyBox.style.display = 'none';
   }
 }
- 
+
 saveBtn.addEventListener('click', async () => {
   saveBtn.disabled = true;
   saveStatus.className = 'save-status';
@@ -452,24 +469,23 @@ saveBtn.addEventListener('click', async () => {
   try{
     let list = [];
     try{
-      const res = await window.storage.get('quiz-history:' + slug);
+      const res = await localDB.get('quiz-history:' + slug);
       list = res ? JSON.parse(res.value) : [];
     } catch(e){ list = []; }
     list.push(entry);
-    const result = await window.storage.set('quiz-history:' + slug, JSON.stringify(list));
+    const result = await localDB.set('quiz-history:' + slug, JSON.stringify(list));
     if(!result) throw new Error('save failed');
     saveStatus.className = 'save-status';
     saveStatus.textContent = '✓ تم حفظ النتيجة بنجاح';
     loadHistory();
   } catch(e){
     saveStatus.className = 'save-status err';
-    saveStatus.textContent = '✗ حدث خطأ أثناء الحفظ، حاول مرة أخرى';
+    saveStatus.textContent = '✗ حدث خطأ أثناء الحفظ: ' + (e && e.message ? e.message : String(e));
     saveBtn.disabled = false;
   }
 });
- 
+
 loadSavedQuizzes();
 </script>
 </body>
 </html>
- 
