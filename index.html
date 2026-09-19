@@ -254,28 +254,38 @@ async function copyText(text){
 }
 
 // ---- تحليل النص الملصوق إلى أسئلة ----
-function parseQuestions(raw){
-  const blocks = raw.split(/\n\s*Question\s*\d+\s*\n/i);
+
+ function parseQuestions(raw){
+  const clean = raw.replace(/\*\*/g, '').replace(/\r/g, '');
+  const blocks = clean.split(/\n?\s*Question\s*#?\s*\d+[:.\-]?\s*\n?/i).filter(b => b.trim().length);
+  const optLineRe = /^\(?([A-Da-d])[\.\)\:]\s*(.*)$/;
+  const correctRe = /^Correct\s*Answer\s*[:\-]?\s*\(?([A-Da-d])\)?/i;
+  const rationaleRe = /^Rationale\s*[:\-]?\s*(.*)/i;
   const parsed = [];
+
   blocks.forEach(block => {
-    const lines = block.split(/\n/).map(l => l.trim()).filter(l => l.length > 0);
+    const lines = block.split('\n')
+      .map(l => l.trim().replace(/^[-•*]\s*/, ''))
+      .filter(l => l.length > 0);
     if(lines.length === 0) return;
+
     let qLines = [];
     let options = [];
     let correctLetter = null;
     let rationale = '';
     let mode = 'question';
+
     lines.forEach(line => {
-      const optMatch = line.match(/^([A-Da-d])\)\s*(.+)/);
-      const correctMatch = line.match(/^Correct\s*Answer\s*:\s*([A-Da-d])\)?/i);
-      const rationaleMatch = line.match(/^Rationale\s*:\s*(.*)/i);
+      const optMatch = line.match(optLineRe);
+      const correctMatch = line.match(correctRe);
+      const rationaleMatch = line.match(rationaleRe);
       if(correctMatch){
         correctLetter = correctMatch[1].toUpperCase();
         mode = 'after';
       } else if(rationaleMatch){
         rationale = rationaleMatch[1];
         mode = 'rationale';
-      } else if(optMatch && (mode === 'question')){
+      } else if(optMatch && mode === 'question'){
         options.push(optMatch[2].trim());
       } else if(mode === 'rationale'){
         rationale += ' ' + line;
@@ -283,6 +293,7 @@ function parseQuestions(raw){
         qLines.push(line);
       }
     });
+
     if(options.length >= 2 && correctLetter){
       const idx = correctLetter.charCodeAt(0) - 65;
       if(idx >= 0 && idx < options.length){
@@ -290,8 +301,9 @@ function parseQuestions(raw){
       }
     }
   });
+
   return parsed;
-}
+} 
 
 // ---- حفظ/تحميل قائمة الاختبارات (تعمل كـ"روابط" دائمة) ----
 async function loadSavedQuizzes(){
