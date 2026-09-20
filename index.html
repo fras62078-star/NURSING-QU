@@ -101,7 +101,7 @@ button.ghost{background:transparent;color:var(--teal);border:1.5px solid var(--t
 
         <p class="hint">الصق أسئلتك بالصيغة التالية (سؤال، خيارات A-D، الإجابة الصحيحة، والتوضيح). يمكنك لصق أي عدد من الأسئلة دفعة واحدة:</p>
         <div class="format-box">Question 1
-&lt;نص السؤال&gt;
+&lt;نص السؤا&gt;
  A) ...
  B) ...
  C) ...
@@ -256,12 +256,17 @@ async function copyText(text){
 // ---- تحليل النص الملصوق إلى أسئلة ----
 
 // ---- تحليل النص الملصوق إلى أسئلة ----
+// ---- تحليل النص الملصوق إلى أسئلة (عربي/إنجليزي، صيغ متعددة) ----
 function parseQuestions(raw){
   const clean = raw.replace(/\*\*/g, '').replace(/\r/g, '');
-  const blocks = clean.split(/\n?\s*Q(?:uestion)?\.?\s*#?\s*\d+[:.\-]?\s*\n?/i).filter(b => b.trim().length);
-  const optLineRe = /^\(?([A-Da-d])[\.\)\:]\s*(.*)$/;
-  const correctRe = /^Correct\s*Answer\s*[:\-]?\s*\(?([A-Da-d])\)?/i;
-  const rationaleRe = /^Rationale\s*[:\-]?\s*(.*)/i;
+  const qMarker = '(?:Question|Q|السؤال|س)';
+  const blocks = clean.split(new RegExp('\\n?\\s*' + qMarker + '\\.?\\s*#?\\s*\\d+[:.\\-]?\\s*\\n?', 'i')).filter(b => b.trim().length);
+
+  const letterMap = { A:0,B:1,C:2,D:3,E:4,F:5, 'أ':0,'ا':0,'ب':1,'ج':2,'د':3,'ه':4,'و':5 };
+  const optLineRe = /^\(?([A-Fa-fأابجدهو])[\.\)\:\-]\s*(.*)$/;
+  const correctRe = /^(?:Correct\s*Answer|Answer|الإجابة\s*الصحيحة|الاجابة\s*الصحيحة|الإجابة|الاجابة|الجواب\s*الصحيح|الجواب)\s*[:\-]?\s*\(?([A-Fa-fأابجدهو])\)?/i;
+  const rationaleRe = /^(?:Rationale|Explanation|التوضيح|التفسير|السبب|توضيح|تفسير)\s*[:\-]?\s*(.*)/i;
+
   const parsed = [];
 
   blocks.forEach(block => {
@@ -281,7 +286,7 @@ function parseQuestions(raw){
       const correctMatch = line.match(correctRe);
       const rationaleMatch = line.match(rationaleRe);
       if(correctMatch){
-        correctLetter = correctMatch[1].toUpperCase();
+        correctLetter = correctMatch[1];
         mode = 'after';
       } else if(rationaleMatch){
         rationale = rationaleMatch[1];
@@ -295,9 +300,10 @@ function parseQuestions(raw){
       }
     });
 
-    if(options.length >= 2 && correctLetter){
-      const idx = correctLetter.charCodeAt(0) - 65;
-      if(idx >= 0 && idx < options.length){
+    if(options.length >= 2 && correctLetter !== null){
+      const key = /[A-Fa-f]/.test(correctLetter) ? correctLetter.toUpperCase() : correctLetter;
+      const idx = letterMap[key];
+      if(idx !== undefined && idx >= 0 && idx < options.length){
         parsed.push({ q: qLines.join(' ').trim(), options, correct: idx, note: rationale.trim() });
       }
     }
@@ -305,7 +311,7 @@ function parseQuestions(raw){
 
   return parsed;
 }
-
+  
 // ---- حفظ/تحميل قائمة الاختبارات (تعمل كـ"روابط" دائمة) ----
 async function loadSavedQuizzes(){
   try{
