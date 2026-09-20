@@ -255,9 +255,10 @@ async function copyText(text){
 
 // ---- تحليل النص الملصوق إلى أسئلة ----
 
- function parseQuestions(raw){
+// ---- تحليل النص الملصوق إلى أسئلة ----
+function parseQuestions(raw){
   const clean = raw.replace(/\*\*/g, '').replace(/\r/g, '');
-  const blocks = clean.split(/\n?\s*Question\s*#?\s*\d+[:.\-]?\s*\n?/i).filter(b => b.trim().length);
+  const blocks = clean.split(/\n?\s*Q(?:uestion)?\.?\s*#?\s*\d+[:.\-]?\s*\n?/i).filter(b => b.trim().length);
   const optLineRe = /^\(?([A-Da-d])[\.\)\:]\s*(.*)$/;
   const correctRe = /^Correct\s*Answer\s*[:\-]?\s*\(?([A-Da-d])\)?/i;
   const rationaleRe = /^Rationale\s*[:\-]?\s*(.*)/i;
@@ -266,7 +267,7 @@ async function copyText(text){
   blocks.forEach(block => {
     const lines = block.split('\n')
       .map(l => l.trim().replace(/^[-•*]\s*/, ''))
-      .filter(l => l.length > 0);
+      .filter(l => l.length > 0 && l !== '---');
     if(lines.length === 0) return;
 
     let qLines = [];
@@ -303,7 +304,7 @@ async function copyText(text){
   });
 
   return parsed;
-} 
+}
 
 // ---- حفظ/تحميل قائمة الاختبارات (تعمل كـ"روابط" دائمة) ----
 async function loadSavedQuizzes(){
