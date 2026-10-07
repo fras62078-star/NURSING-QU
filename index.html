@@ -1,616 +1,382 @@
-/* ==========================================================================
-   نَسْج — متجر السجاد المنزلي الفاخر
-   المحرك التفاعلي للمتجر (Store Application Logic)
-   ========================================================================== */
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>نَسْج | متجر السجاد المنزلي الفاخر</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
 
-// حالة التطبيق
-let currentFilterStyle = null;
-let currentFilterSize = null;
-let currentFilterFlag = null;
-let searchQuery = '';
-let currentSort = 'featured';
+  <!-- شريط الإعلان العلوي -->
+  <div class="top-announcement">
+    <span>✨ شحن مجاني لكافة مدن المملكة للطلبات فوق <strong>499 ر.س</strong> | ضمان ذهبي واسترجاع خلال 14 يوماً</span>
+  </div>
 
-let cart = [];
-let favorites = new Set();
-let activeModalProduct = null;
-let selectedModalSizeId = null;
-let selectedModalColorIdx = 0;
-let modalQuantity = 1;
-
-// عند اكتمال تحميل الصفحة
-document.addEventListener('DOMContentLoaded', () => {
-  renderStylesGrid();
-  renderSizesChips();
-  renderDrawerMenus();
-  renderBestsellers();
-  applyFiltersAndSort();
-  setupSearch();
-});
-
-/* ================== إظهار التنبيهات (Toast) ================== */
-function showToast(msg) {
-  const t = document.getElementById('toastNotice');
-  if (!t) return;
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => {
-    t.classList.remove('show');
-  }, 2800);
-}
-
-/* ================== قسم الأنماط (Styles Grid) ================== */
-function renderStylesGrid() {
-  const container = document.getElementById('stylesGridContainer');
-  if (!container || typeof STYLES === 'undefined') return;
-
-  container.innerHTML = STYLES.map(st => {
-    // جلب أول منتج ينتمي لهذا النمط لتوليد صورة تمثيلية
-    const sampleProduct = PRODUCTS.find(p => p.style === st.id) || PRODUCTS[0];
-    const rugImg = Rugs.url(sampleProduct, 0, 'full');
-    const count = PRODUCTS.filter(p => p.style === st.id).length;
-
-    return `
-      <div class="style-card ${currentFilterStyle === st.id ? 'active' : ''}" onclick="filterByStyle('${st.id}')">
-        <div class="style-img-wrap" style="background:${st.tint}">
-          <img src="${rugImg}" alt="${st.name}" loading="lazy">
-        </div>
-        <div class="style-name">${st.name}</div>
-        <div class="style-count">${count} تصميم مميز</div>
-      </div>
-    `;
-  }).join('');
-}
-
-/* ================== قسم التسوق حسب المقاس ================== */
-function renderSizesChips() {
-  const container = document.getElementById('sizesChipsContainer');
-  if (!container || typeof DEFAULT_SIZES === 'undefined') return;
-
-  const allActive = !currentFilterSize ? 'active' : '';
-  let html = `
-    <button class="size-chip ${allActive}" onclick="filterBySize(null)">
-      <span>كل المقاسات</span>
-    </button>
-  `;
-
-  html += DEFAULT_SIZES.map(s => {
-    const isAct = currentFilterSize === s.id ? 'active' : '';
-    return `
-      <button class="size-chip ${isAct}" onclick="filterBySize('${s.id}')">
-        <span>${s.w} × ${s.h} سم</span>
-      </button>
-    `;
-  }).join('');
-
-  container.innerHTML = html;
-}
-
-/* ================== القوائم الجانبية المنسدلة ================== */
-function renderDrawerMenus() {
-  const stylesMenu = document.getElementById('stylesSubMenu');
-  if (stylesMenu && typeof STYLES !== 'undefined') {
-    stylesMenu.innerHTML = STYLES.map(s => `
-      <li>
-        <a href="#all-products" class="drawer-sub-link" onclick="filterByStyle('${s.id}'); closeDrawer();">
-          ${s.name} (${s.en})
-        </a>
-      </li>
-    `).join('');
-  }
-
-  const sizesMenu = document.getElementById('sizesSubMenu');
-  if (sizesMenu && typeof DEFAULT_SIZES !== 'undefined') {
-    sizesMenu.innerHTML = DEFAULT_SIZES.map(s => `
-      <li>
-        <a href="#all-products" class="drawer-sub-link" onclick="filterBySize('${s.id}'); closeDrawer();">
-          مقاس ${s.w} × ${s.h} سم
-        </a>
-      </li>
-    `).join('');
-  }
-}
-
-function toggleSubMenu(id) {
-  const menu = document.getElementById(id);
-  if (menu) {
-    menu.classList.toggle('open');
-  }
-}
-
-/* ================== حساب سعر المقاس ================== */
-function calculateProductPrice(product, sizeId) {
-  const sizeObj = DEFAULT_SIZES.find(s => s.id === sizeId) || DEFAULT_SIZES[0];
-  const areaM2 = (sizeObj.w * sizeObj.h) / 10000;
-  const rawPrice = Math.max(product.minPrice, Math.round(areaM2 * product.ppm));
-  const finalPrice = product.discount > 0 ? Math.round(rawPrice * (1 - product.discount / 100)) : rawPrice;
-  return { rawPrice, finalPrice, sizeObj };
-}
-
-/* ================== بطاقة المنتج (HTML) ================== */
-function createProductCardHTML(p) {
-  const rugImg = Rugs.url(p, 0, 'full');
-  const styleObj = STYLES.find(s => s.id === p.style) || { name: p.style };
-  const firstSize = p.sizes[0] || DEFAULT_SIZES[0].id;
-  const { rawPrice, finalPrice } = calculateProductPrice(p, firstSize);
-  const isFav = favorites.has(p.id);
-
-  let badgesHTML = '';
-  if (p.discount > 0) {
-    badgesHTML += `<span class="badge badge-sale">خصم ${p.discount}%</span>`;
-  }
-  if (p.isNew) {
-    badgesHTML += `<span class="badge badge-new">جديد</span>`;
-  }
-  if (p.isBest) {
-    badgesHTML += `<span class="badge badge-best">الأكثر طلباً</span>`;
-  }
-
-  return `
-    <div class="product-card">
-      <div class="product-media" onclick="openProductModal('${p.id}')">
-        <img src="${rugImg}" alt="${p.name}" loading="lazy">
-        <div class="product-badges">${badgesHTML}</div>
-        <button class="fav-btn ${isFav ? 'active' : ''}" onclick="event.stopPropagation(); toggleFavorite('${p.id}', this)">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="${isFav ? '#e04b4b' : 'none'}" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+  <!-- رأس الموقع -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <div class="header-right">
+        <!-- زر القائمة الجانبية (3 خطوط) -->
+        <button class="icon-btn" id="openDrawerBtn" aria-label="القائمة الرئيسية">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
         </button>
-        <span class="quick-view-badge">معاينة وتفاصيل</span>
-      </div>
-      <div class="product-info">
-        <span class="product-style-tag">${styleObj.name}</span>
-        <h4 class="product-title" onclick="openProductModal('${p.id}')">${p.name}</h4>
-        <div class="product-sizes-hint">متوفر بـ ${p.sizes.length} مقاسات مختلفة</div>
-        <div class="product-bottom-row">
-          <div class="price-wrap">
-            <div class="price-current">${finalPrice} <span>ر.س</span></div>
-            ${p.discount > 0 ? `<div class="price-old">${rawPrice} ر.س</div>` : ''}
+
+        <!-- الشعار -->
+        <a href="#" class="brand-logo" onclick="resetFilters(); return false;">
+          <div class="brand-mark">ن</div>
+          <div class="brand-text">
+            <span class="brand-title">نَسْج</span>
+            <span class="brand-subtitle">RUGS & CARPETS</span>
           </div>
-          <button class="add-cart-btn" title="إضافة للسلة" onclick="quickAddToCart('${p.id}')">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          </button>
+        </a>
+      </div>
+
+      <!-- مربع البحث -->
+      <div class="header-search">
+        <div class="search-input-wrap">
+          <span class="search-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </span>
+          <input type="text" id="searchInput" class="search-input" placeholder="ابحث عن سجادة بالاسم، النمط، أو اللون...">
+          <button class="search-clear-btn" id="searchClearBtn">✕</button>
         </div>
       </div>
+
+      <!-- الإجراءات السريعة (سطح المكتب) -->
+      <div class="header-left">
+        <nav class="header-nav">
+          <a href="#" class="nav-link active" onclick="resetFilters(); return false;">الرئيسية</a>
+          <a href="#styles-section" class="nav-link">الأنماط</a>
+          <a href="#sizes-section" class="nav-link">المقاسات</a>
+          <a href="#all-products" class="nav-link">الكتالوج الكامل</a>
+        </nav>
+
+        <button class="icon-btn" id="favHeaderBtn" aria-label="المفضلة" onclick="showToast('قائمة المفضلة: ' + favorites.size + ' قطعة')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
+          <span class="badge-count" id="favCountBadge" style="display:none">0</span>
+        </button>
+
+        <button class="icon-btn" id="openCartBtn" aria-label="سلة المشتريات">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+          <span class="badge-count" id="cartCountBadge" style="display:none">0</span>
+        </button>
+      </div>
     </div>
-  `;
-}
+  </header>
 
-/* ================== قسم الأكثر مبيعاً ================== */
-function renderBestsellers() {
-  const container = document.getElementById('bestsellersGrid');
-  if (!container || typeof PRODUCTS === 'undefined') return;
-  const bests = PRODUCTS.filter(p => p.isBest).slice(0, 4);
-  container.innerHTML = bests.map(createProductCardHTML).join('');
-}
+  <!-- المحتوى الرئيسي -->
+  <main class="container">
 
-/* ================== الفلترة والترتيب ================== */
-function applyFiltersAndSort() {
-  const container = document.getElementById('catalogProductsGrid');
-  if (!container || typeof PRODUCTS === 'undefined') return;
-
-  const sortVal = document.getElementById('sortSelect')?.value || currentSort;
-
-  let filtered = PRODUCTS.filter(p => {
-    if (currentFilterStyle && p.style !== currentFilterStyle) return false;
-    if (currentFilterSize && !p.sizes.includes(currentFilterSize)) return false;
-    if (currentFilterFlag === 'new' && !p.isNew) return false;
-    if (currentFilterFlag === 'best' && !p.isBest) return false;
-    if (currentFilterFlag === 'sale' && !(p.discount > 0)) return false;
-
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase().trim();
-      const styleObj = STYLES.find(s => s.id === p.style);
-      const matchName = p.name.toLowerCase().includes(q);
-      const matchStyle = styleObj && (styleObj.ar.includes(q) || styleObj.en.toLowerCase().includes(q));
-      const matchColors = p.colors.some(c => (COLORS[c]?.ar || '').includes(q));
-      if (!matchName && !matchStyle && !matchColors) return false;
-    }
-    return true;
-  });
-
-  // الترتيب
-  if (sortVal === 'price-asc') {
-    filtered.sort((a, b) => {
-      const pa = calculateProductPrice(a, a.sizes[0]).finalPrice;
-      const pb = calculateProductPrice(b, b.sizes[0]).finalPrice;
-      return pa - pb;
-    });
-  } else if (sortVal === 'price-desc') {
-    filtered.sort((a, b) => {
-      const pa = calculateProductPrice(a, a.sizes[0]).finalPrice;
-      const pb = calculateProductPrice(b, b.sizes[0]).finalPrice;
-      return pb - pa;
-    });
-  } else if (sortVal === 'rating') {
-    filtered.sort((a, b) => b.rating - a.rating);
-  }
-
-  // تحديث عنوان القسم وزر إعادة التعيين
-  const resetBtn = document.getElementById('resetFiltersBtn');
-  const catTitle = document.getElementById('catalogTitle');
-  const catSub = document.getElementById('catalogSubtitle');
-
-  const hasFilter = currentFilterStyle || currentFilterSize || currentFilterFlag || searchQuery;
-  if (resetBtn) resetBtn.style.display = hasFilter ? 'inline-block' : 'none';
-
-  if (currentFilterStyle) {
-    const sObj = STYLES.find(s => s.id === currentFilterStyle);
-    if (catTitle) catTitle.textContent = `${sObj.name} (${filtered.length} قطعة)`;
-    if (catSub) catSub.textContent = sObj.tagline;
-  } else if (currentFilterSize) {
-    const szObj = DEFAULT_SIZES.find(s => s.id === currentFilterSize);
-    if (catTitle) catTitle.textContent = `سجاد مقاس ${szObj.w} × ${szObj.h} سم (${filtered.length} قطعة)`;
-    if (catSub) catSub.textContent = 'نتائج المقاس المختار';
-  } else if (searchQuery) {
-    if (catTitle) catTitle.textContent = `نتائج البحث عن: "${searchQuery}" (${filtered.length})`;
-    if (catSub) catSub.textContent = 'نتائج فورية';
-  } else {
-    if (catTitle) catTitle.textContent = `جميع المنتجات المتوفرة (${filtered.length})`;
-    if (catSub) catSub.textContent = 'الكتالوج الشامل';
-  }
-
-  if (filtered.length === 0) {
-    container.innerHTML = `
-      <div style="grid-column: 1/-1; text-align:center; padding:60px 20px; background:var(--card-bg); border-radius:var(--radius-md); border:1px solid var(--border);">
-        <p style="font-size:1.2rem; font-weight:700; color:var(--text); margin-bottom:10px;">لم يتم العثور على سجاد يطابق هذه الخيارات</p>
-        <p style="color:var(--text-muted); font-size:0.9rem; margin-bottom:20px;">جرب تغيير المقاس أو النمط أو مسح كلمة البحث</p>
-        <button class="btn-primary" onclick="resetFilters()">إعادة ضبط البحث والتصنيفات</button>
-      </div>
-    `;
-  } else {
-    container.innerHTML = filtered.map(createProductCardHTML).join('');
-  }
-}
-
-function filterByStyle(styleId) {
-  currentFilterStyle = currentFilterStyle === styleId ? null : styleId;
-  currentFilterFlag = null;
-  renderStylesGrid();
-  applyFiltersAndSort();
-  document.getElementById('all-products')?.scrollIntoView({ behavior: 'smooth' });
-}
-
-function filterBySize(sizeId) {
-  currentFilterSize = sizeId;
-  renderSizesChips();
-  applyFiltersAndSort();
-  document.getElementById('all-products')?.scrollIntoView({ behavior: 'smooth' });
-}
-
-function filterByFlag(flag) {
-  currentFilterFlag = flag;
-  currentFilterStyle = null;
-  renderStylesGrid();
-  applyFiltersAndSort();
-}
-
-function resetFilters() {
-  currentFilterStyle = null;
-  currentFilterSize = null;
-  currentFilterFlag = null;
-  searchQuery = '';
-  const searchInput = document.getElementById('searchInput');
-  if (searchInput) searchInput.value = '';
-  document.getElementById('searchClearBtn')?.classList.remove('visible');
-  renderStylesGrid();
-  renderSizesChips();
-  applyFiltersAndSort();
-}
-
-/* ================== البحث الفوري ================== */
-function setupSearch() {
-  const input = document.getElementById('searchInput');
-  const clearBtn = document.getElementById('searchClearBtn');
-  if (!input) return;
-
-  input.addEventListener('input', (e) => {
-    searchQuery = e.target.value.trim();
-    if (clearBtn) {
-      if (searchQuery.length > 0) clearBtn.classList.add('visible');
-      else clearBtn.classList.remove('visible');
-    }
-    applyFiltersAndSort();
-  });
-
-  clearBtn?.addEventListener('click', () => {
-    input.value = '';
-    searchQuery = '';
-    clearBtn.classList.remove('visible');
-    applyFiltersAndSort();
-  });
-}
-
-/* ================== المفضلة ================== */
-function toggleFavorite(id, btnElem) {
-  if (favorites.has(id)) {
-    favorites.delete(id);
-    showToast('تمت الإزالة من المفضلة');
-  } else {
-    favorites.add(id);
-    showToast('تمت الإضافة إلى المفضلة ❤️');
-  }
-  updateFavBadge();
-  if (btnElem) {
-    btnElem.classList.toggle('active', favorites.has(id));
-    const svg = btnElem.querySelector('svg');
-    if (svg) svg.setAttribute('fill', favorites.has(id) ? '#e04b4b' : 'none');
-  }
-}
-
-function updateFavBadge() {
-  const badge = document.getElementById('favCountBadge');
-  if (!badge) return;
-  if (favorites.size > 0) {
-    badge.textContent = favorites.size;
-    badge.style.display = 'flex';
-  } else {
-    badge.style.display = 'none';
-  }
-}
-
-/* ================== السلة (Cart Logic) ================== */
-function quickAddToCart(productId) {
-  const p = PRODUCTS.find(x => x.id === productId);
-  if (!p) return;
-  const sizeId = p.sizes[0] || DEFAULT_SIZES[0].id;
-  addToCart(p, sizeId, 0, 1);
-  showToast(`تمت إضافة "${p.name}" إلى السلة`);
-}
-
-function addToCart(product, sizeId, colorIdx, qty) {
-  const existingIdx = cart.findIndex(item => item.product.id === product.id && item.sizeId === sizeId && item.colorIdx === colorIdx);
-  if (existingIdx > -1) {
-    cart[existingIdx].qty += qty;
-  } else {
-    cart.push({ product, sizeId, colorIdx, qty });
-  }
-  updateCartUI();
-  openCart();
-}
-
-function removeFromCart(index) {
-  cart.splice(index, 1);
-  updateCartUI();
-  showToast('تم حذف المنتج من السلة');
-}
-
-function updateCartUI() {
-  const totalItems = cart.reduce((sum, item) => sum + item.qty, 0);
-  const totalPrice = cart.reduce((sum, item) => {
-    const { finalPrice } = calculateProductPrice(item.product, item.sizeId);
-    return sum + (finalPrice * item.qty);
-  }, 0);
-
-  // تحديث الشارات
-  const hBadge = document.getElementById('cartCountBadge');
-  const bBadge = document.getElementById('bottomCartBadge');
-  const countSpan = document.getElementById('cartTotalItemsCount');
-  const totalSpan = document.getElementById('cartTotalPrice');
-
-  if (hBadge) {
-    hBadge.textContent = totalItems;
-    hBadge.style.display = totalItems > 0 ? 'flex' : 'none';
-  }
-  if (bBadge) {
-    bBadge.textContent = totalItems;
-    bBadge.style.display = totalItems > 0 ? 'flex' : 'none';
-  }
-  if (countSpan) countSpan.textContent = totalItems;
-  if (totalSpan) totalSpan.textContent = `${totalPrice.toLocaleString()} ر.س`;
-
-  // قائمة السلة
-  const list = document.getElementById('cartItemsList');
-  if (!list) return;
-
-  if (cart.length === 0) {
-    list.innerHTML = `
-      <div style="text-align:center; padding:40px 10px; color:var(--text-muted);">
-        <p style="font-size:1.1rem; font-weight:700; margin-bottom:6px;">السلة فارغة حالياً</p>
-        <p style="font-size:0.85rem;">اختر ما يناسب ذوقك من تشكيلات السجاد الفاخرة</p>
-      </div>
-    `;
-    return;
-  }
-
-  list.innerHTML = cart.map((item, idx) => {
-    const { finalPrice, sizeObj } = calculateProductPrice(item.product, item.sizeId);
-    const rugImg = Rugs.url(item.product, item.colorIdx, 'full');
-    return `
-      <div class="cart-item">
-        <img src="${rugImg}" alt="${item.product.name}" class="cart-item-img">
-        <div class="cart-item-info">
-          <div class="cart-item-title">${item.product.name}</div>
-          <div class="cart-item-meta">المقاس: ${sizeObj.w}×${sizeObj.h} سم | الكمية: ${item.qty}</div>
-          <div class="cart-item-price">${(finalPrice * item.qty).toLocaleString()} ر.س</div>
+    <!-- البانر الترويجي الفاخر -->
+    <section class="hero-section">
+      <img src="assets/hero.jpg" alt="سجاد فاخر" class="hero-bg">
+      <div class="hero-overlay"></div>
+      <div class="hero-content">
+        <span class="hero-tag">🌟 تشكيلة خريف وشتاء 2026 الحصرية</span>
+        <h1 class="hero-title">فخامة تحكي تفاصيل منزلك ونقوش تدوم لأجيال</h1>
+        <p class="hero-desc">استكشف أفخر تشكيلات السجاد اليدوي والعصري؛ حِرفية أصيلة، خامات ناعمة ومقاسات تناسب كل زاوية في مساحتك المفضلة.</p>
+        <div class="hero-actions">
+          <a href="#styles-section" class="btn-primary">
+            <span>اكتشف الأنماط</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+          </a>
+          <a href="#sizes-section" class="btn-outline-light">تسوق حسب المقاس</a>
         </div>
-        <button class="cart-item-remove" onclick="removeFromCart(${idx})" title="حذف">✕</button>
       </div>
-    `;
-  }).join('');
-}
+    </section>
 
-function openCart() {
-  document.getElementById('cartBackdrop')?.classList.add('active');
-  document.body.classList.add('drawer-open');
-}
-
-function closeCart() {
-  document.getElementById('cartBackdrop')?.classList.remove('active');
-  document.body.classList.remove('drawer-open');
-}
-
-document.getElementById('openCartBtn')?.addEventListener('click', openCart);
-
-/* ================== القائمة الجانبية (Drawer ☰) ================== */
-function openDrawer() {
-  document.getElementById('drawerBackdrop')?.classList.add('active');
-  document.body.classList.add('drawer-open');
-}
-
-function closeDrawer() {
-  document.getElementById('drawerBackdrop')?.classList.remove('active');
-  document.body.classList.remove('drawer-open');
-}
-
-document.getElementById('openDrawerBtn')?.addEventListener('click', openDrawer);
-
-/* ================== نافذة تفاصيل السجادة (Modal) ================== */
-function openProductModal(productId) {
-  const p = PRODUCTS.find(x => x.id === productId);
-  if (!p) return;
-
-  activeModalProduct = p;
-  selectedModalSizeId = p.sizes[0] || DEFAULT_SIZES[0].id;
-  selectedModalColorIdx = 0;
-  modalQuantity = 1;
-
-  renderModalContent();
-  document.getElementById('productModal')?.classList.add('active');
-  document.body.classList.add('modal-open');
-}
-
-function closeModal() {
-  document.getElementById('productModal')?.classList.remove('active');
-  document.body.classList.remove('modal-open');
-  activeModalProduct = null;
-}
-
-function updateModalView(viewType, btnElem) {
-  const mainImg = document.getElementById('modalMainImage');
-  if (mainImg && activeModalProduct) {
-    mainImg.src = Rugs.url(activeModalProduct, selectedModalColorIdx, viewType);
-  }
-  document.querySelectorAll('.view-thumb-btn').forEach(b => b.classList.remove('active'));
-  if (btnElem) btnElem.classList.add('active');
-}
-
-function updateModalSize(sizeId) {
-  selectedModalSizeId = sizeId;
-  const { rawPrice, finalPrice } = calculateProductPrice(activeModalProduct, sizeId);
-  const pElem = document.getElementById('modalPriceVal');
-  const oldPElem = document.getElementById('modalOldPriceVal');
-  if (pElem) pElem.textContent = `${finalPrice.toLocaleString()} ر.س`;
-  if (oldPElem && activeModalProduct.discount > 0) {
-    oldPElem.textContent = `${rawPrice.toLocaleString()} ر.س`;
-  }
-  document.querySelectorAll('.modal-size-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.sizeId === sizeId);
-  });
-}
-
-function updateModalColor(idx) {
-  selectedModalColorIdx = idx;
-  const mainImg = document.getElementById('modalMainImage');
-  if (mainImg && activeModalProduct) {
-    mainImg.src = Rugs.url(activeModalProduct, idx, 'full');
-  }
-  document.querySelectorAll('.color-dot-btn').forEach((b, i) => {
-    b.classList.toggle('active', i === idx);
-  });
-}
-
-function changeModalQty(delta) {
-  modalQuantity = Math.max(1, modalQuantity + delta);
-  const qElem = document.getElementById('modalQtyVal');
-  if (qElem) qElem.textContent = modalQuantity;
-}
-
-function addModalProductToCart() {
-  if (!activeModalProduct) return;
-  addToCart(activeModalProduct, selectedModalSizeId, selectedModalColorIdx, modalQuantity);
-  closeModal();
-  showToast(`تمت إضافة "${activeModalProduct.name}" إلى السلة بنجاح`);
-}
-
-function renderModalContent() {
-  const p = activeModalProduct;
-  const body = document.getElementById('modalBodyContent');
-  if (!body || !p) return;
-
-  const { rawPrice, finalPrice } = calculateProductPrice(p, selectedModalSizeId);
-  const styleObj = STYLES.find(s => s.id === p.style);
-  const currentImg = Rugs.url(p, selectedModalColorIdx, 'full');
-
-  // خيارات المقاسات
-  const sizesHTML = p.sizes.map(sId => {
-    const sObj = DEFAULT_SIZES.find(s => s.id === sId) || { w: 0, h: 0 };
-    return `
-      <button class="modal-size-btn ${sId === selectedModalSizeId ? 'active' : ''}" data-size-id="${sId}" onclick="updateModalSize('${sId}')">
-        ${sObj.w} × ${sObj.h} سم
-      </button>
-    `;
-  }).join('');
-
-  // خيارات الألوان
-  const colorsHTML = p.colors.map((cKey, idx) => {
-    const colObj = COLORS[cKey] || { ar: cKey, hex: '#ddd' };
-    const bg = colObj.hex === 'multi' ? 'linear-gradient(45deg, #f28c8c, #7cc6b8, #f5c451)' : colObj.hex;
-    return `
-      <button class="color-dot-btn ${idx === 0 ? 'active' : ''}" style="background:${bg}" title="${colObj.ar}" onclick="updateModalColor(${idx})"></button>
-    `;
-  }).join('');
-
-  body.innerHTML = `
-    <!-- معرض الصور وزوايا العرض -->
-    <div class="modal-gallery">
-      <div class="gallery-main">
-        <img src="${currentImg}" id="modalMainImage" alt="${p.name}">
+    <!-- شريط مزايا الشراء -->
+    <section class="features-strip">
+      <div class="feature-box">
+        <div class="feature-icon-wrap">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+        </div>
+        <div>
+          <div class="feature-title">أصالة الخامات وضمان الجودة</div>
+          <div class="feature-desc">صوف طبيعي، حرير ومواد مقاومة للبقع</div>
+        </div>
       </div>
-      <div class="gallery-views-row">
-        <button class="view-thumb-btn active" onclick="updateModalView('full', this)">كاملة</button>
-        <button class="view-thumb-btn" onclick="updateModalView('room', this)">داخل غرفة</button>
-        <button class="view-thumb-btn" onclick="updateModalView('close', this)">عن قرب</button>
-        <button class="view-thumb-btn" onclick="updateModalView('corner', this)">الزاوية والإطار</button>
+      <div class="feature-box">
+        <div class="feature-icon-wrap">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+        </div>
+        <div>
+          <div class="feature-title">توصيل سريع ومجاني</div>
+          <div class="feature-desc">لكافة مناطق ومدن المملكة بضمان التوصيل السليم</div>
+        </div>
       </div>
-    </div>
+      <div class="feature-box">
+        <div class="feature-icon-wrap">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M3 21v-5h5"></path></svg>
+        </div>
+        <div>
+          <div class="feature-title">تجربة منزلية واسترجاع مرن</div>
+          <div class="feature-desc">استبدال واسترجاع مريح خلال 14 يوماً</div>
+        </div>
+      </div>
+      <div class="feature-box">
+        <div class="feature-icon-wrap">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 14 14"></polyline></svg>
+        </div>
+        <div>
+          <div class="feature-title">دعم واستشارات ديكور</div>
+          <div class="feature-desc">مساعدة فورية لاختيار المقاس واللون المناسب</div>
+        </div>
+      </div>
+    </section>
 
-    <!-- التفاصيل والخيارات -->
-    <div class="modal-details">
-      <div class="modal-sku">رمز المنتج: ${p.specs.sku} | النمط: ${styleObj.name}</div>
-      <h2 class="modal-title">${p.name}</h2>
-      
-      <div class="modal-rating">
-        <span>★ ${p.rating}</span>
-        <span class="modal-rating-count">(${p.reviews} تقييم موثق)</span>
+    <!-- قسم أنماط السجاد (Cards Grid) -->
+    <section id="styles-section" class="mb-12">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <span class="section-subtitle">تشكيلاتنا المتخصصة</span>
+          <h2 class="section-title">اكتشف أنماط وتصاميم السجاد</h2>
+        </div>
+        <button class="section-link" onclick="resetFilters()">عرض جميع الأنماط</button>
       </div>
 
-      <div class="modal-price-box">
-        <div class="modal-price" id="modalPriceVal">${finalPrice.toLocaleString()} ر.س</div>
-        ${p.discount > 0 ? `<div class="modal-old-price" id="modalOldPriceVal">${rawPrice.toLocaleString()} ر.س</div>` : ''}
+      <div class="styles-carousel" id="stylesGridContainer">
+        <!-- يتم ملؤها ديناميكياً بواسطة JavaScript -->
+      </div>
+    </section>
+
+    <!-- قسم التسوق حسب المقاس -->
+    <section id="sizes-section" class="mb-12">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <span class="section-subtitle">المقاسات الدقيقة</span>
+          <h2 class="section-title">تسوق حسب مقاس غرفتك</h2>
+        </div>
+        <span class="text-muted" style="font-size:0.85rem">اختر المقاس لعرض السجاد المتاح به فوراً</span>
       </div>
 
-      <div>
-        <div class="modal-option-label">اختر المقاس:</div>
-        <div class="modal-sizes-grid">${sizesHTML}</div>
+      <div class="sizes-chips-wrap" id="sizesChipsContainer">
+        <!-- يتم ملؤها ديناميكياً بواسطة JavaScript -->
+      </div>
+    </section>
+
+    <!-- قسم المنتجات الأكثر مبيعاً -->
+    <section id="bestsellers-section" class="mb-12">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <span class="section-subtitle">الأكثر طلباً</span>
+          <h2 class="section-title">قطع نالت إعجاب عملائنا</h2>
+        </div>
+        <a href="#all-products" class="section-link">تصفح الكل ←</a>
+      </div>
+      <div class="products-grid" id="bestsellersGrid"></div>
+    </section>
+
+    <!-- بانر الحرفية والإتقان الفني -->
+    <section class="artisan-banner">
+      <img src="assets/artisan.jpg" alt="حياكة يدوية" class="artisan-image">
+      <div class="artisan-content">
+        <div class="artisan-tag">حكاية حِرفة</div>
+        <h3 class="artisan-title">نسيج متقن، وغزل يدوي يصنع الفرق في كل خيط</h3>
+        <p class="artisan-desc">نختار سجادنا بعناية فائقة من أعرق بيوت الغزل والنسيج حول العالم، من سدو الجزيرة إلى نول أصفهان والشرق الأقصى، معتمدين على مواد طبيعية 100% تدوم طويلاً وتمنح دفئاً وأصالة لا تضاهى.</p>
+        <button class="btn-primary" onclick="showToast('مرحباً بك! مستشار الديكور متاح لمساعدتك عبر الواتساب.')">
+          تواصل مع مستشار الديكور
+        </button>
+      </div>
+    </section>
+
+    <!-- قسم كتالوج المنتجات الرئيسي مع الفلترة والبحث -->
+    <section id="all-products">
+      <div class="section-header">
+        <div class="section-title-wrap">
+          <span class="section-subtitle" id="catalogSubtitle">الكتالوج الشامل</span>
+          <h2 class="section-title" id="catalogTitle">جميع المنتجات المتوفرة</h2>
+        </div>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <select id="sortSelect" onchange="applyFiltersAndSort()" style="padding:8px 14px; border-radius:var(--radius-sm); background:var(--card-bg); font-weight:600; font-size:0.86rem;">
+            <option value="featured">المقترح والمميز</option>
+            <option value="price-asc">السعر: من الأقل للأعلى</option>
+            <option value="price-desc">السعر: من الأعلى للأقل</option>
+            <option value="rating">الأعلى تقييماً</option>
+          </select>
+          <button id="resetFiltersBtn" onclick="resetFilters()" style="display:none; padding:8px 14px; border-radius:var(--radius-sm); background:var(--surface); font-size:0.84rem; font-weight:600; color:var(--primary);">إعادة ضبط</button>
+        </div>
       </div>
 
-      <div>
-        <div class="modal-option-label">الألوان المتوفرة:</div>
-        <div class="modal-colors-row">${colorsHTML}</div>
-      </div>
+      <div class="products-grid" id="catalogProductsGrid"></div>
+    </section>
 
-      <div>
-        <div class="modal-option-label">الكمية:</div>
-        <div class="modal-qty-row">
-          <div class="qty-control">
-            <button class="qty-btn" onclick="changeModalQty(-1)">-</button>
-            <span class="qty-val" id="modalQtyVal">1</span>
-            <button class="qty-btn" onclick="changeModalQty(1)">+</button>
+  </main>
+
+  <!-- تذييل الموقع -->
+  <footer class="site-footer">
+    <div class="container">
+      <div class="footer-grid">
+        <div class="footer-brand">
+          <div class="brand-logo">
+            <div class="brand-mark">ن</div>
+            <div class="brand-text">
+              <span class="brand-title" style="color:#fff;">نَسْج</span>
+              <span class="brand-subtitle" style="color:#ffd199;">RUGS & CARPETS</span>
+            </div>
           </div>
-          <button class="btn-primary" style="flex:1; justify-content:center;" onclick="addModalProductToCart()">
-            أضف إلى السلة
-          </button>
+          <p>العلامة التجارية السعودية الرائدة في اقتناء وتصميم أفخر أنواع السجاد المنزلي العصري والكلاسيكي بأسلوب يجمع الأصالة بالحداثة.</p>
+          <div style="font-size:0.88rem; color:#d9cebe;">📍 الرياض، المملكة العربية السعودية</div>
+        </div>
+
+        <div class="footer-col">
+          <h4>تسوق بالأنماط</h4>
+          <ul class="footer-links">
+            <li><a href="#" onclick="filterByStyle('bohemian'); return false;">السجاد البوهيمي</a></li>
+            <li><a href="#" onclick="filterByStyle('modern'); return false;">السجاد المودرن</a></li>
+            <li><a href="#" onclick="filterByStyle('classic'); return false;">السجاد الكلاسيكي</a></li>
+            <li><a href="#" onclick="filterByStyle('luxury'); return false;">السجاد الفاخر</a></li>
+            <li><a href="#" onclick="filterByStyle('traditional'); return false;">السجاد التراثي</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>روابط سريعة</h4>
+          <ul class="footer-links">
+            <li><a href="#sizes-section">تسوق بالمقاسات</a></li>
+            <li><a href="#" onclick="openDrawerMenu('about'); return false;">من نحن</a></li>
+            <li><a href="#" onclick="openDrawerMenu('contact'); return false;">تواصل معنا</a></li>
+            <li><a href="#" onclick="showToast('سياسة الشحن: شحن وتوصيل مجاني للطلبات فوق 499 ر.س'); return false;">الشحن والتوصيل</a></li>
+            <li><a href="#" onclick="showToast('سياسة الاسترجاع: استبدال واسترجاع متاح خلال 14 يوماً'); return false;">سياسة الاستبدال والضمان</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-col">
+          <h4>خدمة العملاء</h4>
+          <ul class="footer-links">
+            <li><span style="color:#a89f94;">الرقم الموحد:</span> 920000000</li>
+            <li><span style="color:#a89f94;">البريد:</span> care@nasjrugs.sa</li>
+            <li><span style="color:#a89f94;">الدوام:</span> يومياً 9:00 ص - 10:00 م</li>
+          </ul>
         </div>
       </div>
 
-      <!-- المواصفات والخامة -->
-      <div class="modal-specs-list">
-        <div class="spec-item"><span class="spec-label">الخامة:</span> <span class="spec-val">${p.specs.material}</span></div>
-        <div class="spec-item"><span class="spec-label">سماكة الوبر:</span> <span class="spec-val">${p.specs.pile}</span></div>
-        <div class="spec-item"><span class="spec-label">نوع النسج:</span> <span class="spec-val">${p.specs.weave}</span></div>
-        <div class="spec-item"><span class="spec-label">بلد الصنع:</span> <span class="spec-val">${p.specs.origin}</span></div>
+      <div class="footer-bottom">
+        <p>© 2026 متجر نَسْج للسجاد الفاخر. جميع الحقوق محفوظة | نموذج واجهة تجريبية تفاعلية</p>
       </div>
-
-      <p style="font-size:0.88rem; color:var(--text-muted); line-height:1.6;">${p.description}</p>
     </div>
-  `;
-}
+  </footer>
 
+  <!-- شريط الجوال السفلي الثابت (4 خيارات أساسية) -->
+  <nav class="bottom-nav">
+    <button class="nav-bottom-item active" onclick="resetFilters(); window.scrollTo({top:0, behavior:'smooth'});">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+      <span>الرئيسية</span>
+    </button>
+    <button class="nav-bottom-item" onclick="openDrawer();">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+      <span>التصنيفات</span>
+    </button>
+    <button class="nav-bottom-item" onclick="openCart();">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg>
+      <span>السلة</span>
+      <span class="badge-count" id="bottomCartBadge" style="display:none">0</span>
+    </button>
+    <button class="nav-bottom-item" onclick="showToast('حسابي: تسجيل الدخول ومتابعة الطلبات متاح في النسخة المكتملة');">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+      <span>حسابي</span>
+    </button>
+  </nav>
+
+  <!-- القائمة الجانبية (3 خطوط ☰) -->
+  <div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawer()">
+    <div class="side-drawer" onclick="event.stopPropagation()">
+      <div class="drawer-header">
+        <div class="drawer-title">قائمة المتجر</div>
+        <button class="icon-btn" onclick="closeDrawer()">✕</button>
+      </div>
+      <div class="drawer-body">
+        <ul class="drawer-menu-list">
+          <li>
+            <a href="#" class="drawer-link" onclick="toggleSubMenu('stylesSubMenu'); return false;">
+              <span>1. تصنيفات وأنماط السجاد</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </a>
+            <ul class="drawer-sub-menu" id="stylesSubMenu">
+              <!-- يُملأ ديناميكياً بجميع الأنماط الـ 10 -->
+            </ul>
+          </li>
+          <li>
+            <a href="#" class="drawer-link" onclick="toggleSubMenu('sizesSubMenu'); return false;">
+              <span>2. التسوق حسب المقاس</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </a>
+            <ul class="drawer-sub-menu" id="sizesSubMenu">
+              <!-- يُملأ ديناميكياً بالمقاسات -->
+            </ul>
+          </li>
+          <li>
+            <a href="#all-products" class="drawer-link" onclick="filterByFlag('new'); closeDrawer();">
+              <span>3. أحدث المنتجات (وصل حديثاً)</span>
+            </a>
+          </li>
+          <li>
+            <a href="#all-products" class="drawer-link" onclick="filterByFlag('best'); closeDrawer();">
+              <span>4. الأكثر مبيعاً</span>
+            </a>
+          </li>
+          <li>
+            <a href="#all-products" class="drawer-link" onclick="filterByFlag('sale'); closeDrawer();">
+              <span>5. العروض والخصومات الخاصة</span>
+            </a>
+          </li>
+          <li>
+            <a href="#" class="drawer-link" onclick="showToast('متجر نَسْج: متخصصون في صناعة وتوريد أرقى السجاد العصري والكلاسيكي.'); closeDrawer();">
+              <span>6. من نحن</span>
+            </a>
+          </li>
+          <li>
+            <a href="#" class="drawer-link" onclick="showToast('خدمة العملاء: care@nasjrugs.sa | هاتف: 920000000'); closeDrawer();">
+              <span>7. تواصل معنا</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- درج سلة المشتريات -->
+  <div class="cart-backdrop" id="cartBackdrop" onclick="closeCart()">
+    <div class="cart-drawer" onclick="event.stopPropagation()">
+      <div class="cart-header">
+        <div style="font-weight:800; font-size:1.2rem;">سلة المشتريات (<span id="cartTotalItemsCount">0</span>)</div>
+        <button class="icon-btn" onclick="closeCart()">✕</button>
+      </div>
+      <div class="cart-items-wrap" id="cartItemsList">
+        <!-- عناصر السلة -->
+      </div>
+      <div class="cart-footer">
+        <div class="cart-total-row">
+          <span>الإجمالي التقريبي:</span>
+          <span id="cartTotalPrice">0 ر.س</span>
+        </div>
+        <button class="btn-primary" style="width:100%; justify-content:center;" onclick="showToast('🎉 تجربة ممتازة! سيتم تحويلك لبوابة الدفع الإلكتروني في النسخة المباشرة.');">
+          إتمام الطلب بأمان
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- نافذة تفاصيل السجادة الكاملة (Modal) -->
+  <div class="modal-backdrop" id="productModal" onclick="closeModal()">
+    <div class="modal-dialog" onclick="event.stopPropagation()">
+      <button class="modal-close-btn" onclick="closeModal()">✕</button>
+      <div class="modal-body" id="modalBodyContent">
+        <!-- يُملأ ديناميكياً عبر JS عند النقر على أي منتج -->
+      </div>
+    </div>
+  </div>
+
+  <!-- صندوق رسائل التنبيه العائمة -->
+  <div class="toast-notice" id="toastNotice"></div>
+
+  <!-- استدعاء ملفات البيانات ومولد الرسوم ومحرك الصفحة -->
+  <script src="js/data.js"></script>
+  <script src="js/rugs.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
